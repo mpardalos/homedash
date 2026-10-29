@@ -15,4 +15,4 @@ homedash = "homedash.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-homedash = ["templates/*.html", "static/vendor/*"]
+homedash = ["templates/*.html", "static/*.css", "static/vendor/*"]

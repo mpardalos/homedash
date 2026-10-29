@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Homedash</h1>
-<p>Welcome to Homedash.</p>
-<button hx-get="{{ url_for('server_time') }}" hx-target="#server-time">
-  Refresh server time
-</button>
-<p id="server-time" aria-live="polite">Click to fetch the current server time.</p>
+<nav class="service-grid" aria-label="Services">
+  {% for name, svc in services.items() %}
+    <a href="{{ svc['url'] }}">
+      <img src="{{ svc['icon'] }}" alt="" width="32" height="32">
+      {{ name }}
+    </a>
+  {% endfor %}
+</nav>
 {% endblock %}

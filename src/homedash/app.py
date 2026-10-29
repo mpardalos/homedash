@@ -15,13 +15,47 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 
+services = {
+    'Jellyfin': {
+        'url': 'https://jellyfin.home.mpardalos.com',
+        'icon': 'https://jellyfin.home.mpardalos.com/web/favicon.bc8d51405ec040305a87.ico'
+    },
+    'Seerr': {
+        'url': 'https://seerr.home.mpardalos.com',
+        'icon': 'https://seerr.home.mpardalos.com/favicon-32x32.png'
+    },
+    'Sonarr': {
+        'url': 'https://sonarr.home.mpardalos.com',
+        'icon': 'https://sonarr.home.mpardalos.com/favicon.ico'
+    },
+    'Radarr': {
+        'url': 'https://radarr.home.mpardalos.com',
+        'icon': 'https://radarr.home.mpardalos.com/favicon.ico'
+    },
+    'Prowlarr': {
+        'url': 'https://prowlarr.home.mpardalos.com',
+        'icon': 'https://prowlarr.home.mpardalos.com/favicon.ico'
+    },
+    'Torrents': {
+        'url': 'https://torrents.home.mpardalos.com',
+        'icon': 'https://torrents.home.mpardalos.com/transmission/web/images/favicon.svg'
+    },
+    'Miniflux': {
+        'url': 'https://miniflux.home.mpardalos.com',
+        'icon': 'https://miniflux.home.mpardalos.com/favicon.ico'
+    },
+    'Donetick': {
+        'url': 'https://donetick.home.mpardalos.com',
+        'icon': 'https://donetick.home.mpardalos.com/logo.svg'
+    }
+}
+
+
 async def homepage(request: Request) -> Response:
-    return templates.TemplateResponse(request, "index.html")
-
-
-async def server_time(request: Request) -> Response:
     return templates.TemplateResponse(
-        request, "time.html", {"time": datetime.now(timezone.utc)}
+        request,
+        "index.html",
+        {'services': services}
     )
 
 
@@ -32,7 +66,6 @@ async def health(request: Request) -> JSONResponse:
 app = Starlette(
     routes=[
         Route("/", homepage),
-        Route("/time", server_time),
         Route("/health", health),
         Mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static"),
     ],
