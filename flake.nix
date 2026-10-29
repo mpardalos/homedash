@@ -33,6 +33,7 @@
             };
             build-system = [ pkgs.python3Packages.setuptools ];
             dependencies = with pkgs.python3Packages; [
+              jinja2
               starlette
               uvicorn
             ];
@@ -46,6 +47,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           python = pkgs.python3.withPackages (ps: [
+            ps.jinja2
             ps.starlette
             ps.uvicorn
           ]);

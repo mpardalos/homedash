@@ -15,10 +15,19 @@ Run `dev` from the project root. Open <http://127.0.0.1:8000>.
 `/health` returns `{"status":"ok"}`. The server reloads on changes;
 pass Uvicorn options with e.g. `dev --port 8080`.
 
+## Templates and htmx
+
+Jinja2 templates live in `src/homedash/templates`; `base.html` loads the locally
+vendored htmx 2.0.11 script. The homepage includes a button that fetches `/time`
+and replaces a fragment without a page reload. `/health` remains a JSON endpoint.
+
+Static assets live in `src/homedash/static`, including vendored js
+dependencies under `vendor/`
+
 ## Deploy
 
 ```sh
-nix build
+nix buid
 ./result/bin/homedash --host 0.0.0.0 --port 8000
 ```
 
