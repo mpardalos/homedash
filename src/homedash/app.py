@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import asyncio
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -9,6 +10,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
+from sse_starlette import EventSourceResponse, ServerSentEvent
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -51,6 +53,26 @@ services = {
 }
 
 
+async def syslog(request: Request) -> Response:
+    unit = request.query_params.get('unit')
+    unit_arg = f'-u {unit}' if unit else ''
+
+    async def tail_syslog():
+        proc = await asyncio.create_subprocess_shell(
+            f"journalctl -f {unit_arg}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        async for line in proc.stdout:
+            yield ServerSentEvent(
+                id='syslog',
+                data=line.decode('utf-8').strip()
+            )
+
+    return EventSourceResponse(tail_syslog())
+
+
 async def homepage(request: Request) -> Response:
     return templates.TemplateResponse(
         request,
@@ -66,6 +88,7 @@ async def health(request: Request) -> JSONResponse:
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/syslog", syslog),
         Route("/health", health),
         Mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static"),
     ],

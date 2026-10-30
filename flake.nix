@@ -12,6 +12,13 @@
         "x86_64-darwin"
         "aarch64-darwin"
       ];
+
+      pythonDeps = p: [
+        p.jinja2
+        p.starlette
+        p.sse-starlette
+        p.uvicorn
+      ];
     in
     {
       packages = forAllSystems (
@@ -32,11 +39,7 @@
               ];
             };
             build-system = [ pkgs.python3Packages.setuptools ];
-            dependencies = with pkgs.python3Packages; [
-              jinja2
-              starlette
-              uvicorn
-            ];
+            dependencies = pythonDeps pkgs.python3Packages;
             meta.mainProgram = "homedash";
           };
         }
@@ -46,11 +49,7 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          python = pkgs.python3.withPackages (ps: [
-            ps.jinja2
-            ps.starlette
-            ps.uvicorn
-          ]);
+          python = pkgs.python3.withPackages pythonDeps;
           dev = pkgs.writeShellScriptBin "dev" ''
             exec ${python}/bin/python -m uvicorn homedash.app:app --app-dir src --reload "$@"
           '';

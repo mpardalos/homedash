@@ -6,7 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "homedash"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["starlette", "uvicorn", "jinja2"]
+dependencies = [
+  "starlette",
+  "sse-starlette",
+  "uvicorn",
+  "jinja2"
+]
 
 [project.scripts]
 homedash = "homedash.__main__:main"
