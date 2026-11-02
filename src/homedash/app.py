@@ -14,6 +14,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from sse_starlette import EventSourceResponse, ServerSentEvent
+from starlette.types import Message
 
 from homedash.dbus.systemd_interface import OrgFreedesktopSystemd1ManagerInterface
 from homedash.dbus.systemd_unit_interface import OrgFreedesktopSystemd1UnitInterface
@@ -100,20 +101,23 @@ async def syslog(request: Request) -> Response:
     unit = request.query_params.get('unit')
     unit_arg = f'-u {unit}' if unit else ''
 
-    async def tail_syslog():
-        proc = await asyncio.create_subprocess_shell(
-            f"journalctl -f {unit_arg}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+    proc = await asyncio.create_subprocess_shell(
+           f"journalctl -f {unit_arg}",
+           stdout=asyncio.subprocess.PIPE,
+           stderr=asyncio.subprocess.PIPE,
+    )
 
+    async def tail_syslog():
         async for line in proc.stdout:  # pyright: ignore[reportOptionalIterable]
             yield ServerSentEvent(
                 id='syslog',
                 data=line.decode('utf-8').strip()
             )
 
-    return EventSourceResponse(tail_syslog())
+    async def finalize(msg: Message):
+        proc.kill()
+
+    return EventSourceResponse(tail_syslog(), client_close_handler_callable=finalize)
 
 
 async def status(request: Request) -> Response:
