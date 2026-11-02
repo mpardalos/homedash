@@ -97,8 +97,7 @@ class SystemD(OrgFreedesktopSystemd1ManagerInterface):
 systemd = SystemD()
 
 
-async def syslog(request: Request) -> Response:
-    unit = request.query_params.get('unit')
+async def syslog_event_source(unit: str | None = None) -> EventSourceResponse:
     unit_arg = f'-u {unit}' if unit else ''
 
     proc = await asyncio.create_subprocess_shell(
@@ -120,8 +119,16 @@ async def syslog(request: Request) -> Response:
     return EventSourceResponse(tail_syslog(), client_close_handler_callable=finalize)
 
 
+async def unit_log(request: Request) -> Response:
+    return await syslog_event_source(request.path_params['unit'])
+
+
+async def system_log(request: Request) -> Response:
+    return await syslog_event_source()
+
+
 async def status(request: Request) -> Response:
-    unit_name = request.query_params['unit']
+    unit_name: str = request.path_params['unit']
     try:
         unit = await systemd.get_unit_proxy(unit_name)
     except NoSuchUnit:
@@ -158,9 +165,9 @@ async def health(request: Request) -> JSONResponse:
 app = Starlette(
     routes=[
         Route("/", homepage),
-        Route("/syslog", syslog),
-        Route("/status", status),
-        Route("/health", health),
+        Route("/service/{unit}/status", status),
+        Route("/service/{unit}/log", unit_log),
+        Route("/system/log", system_log),
         Mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static"),
     ],
     middleware=[Middleware(GZipMiddleware)],
