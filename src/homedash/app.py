@@ -1,16 +1,22 @@
 from datetime import datetime, timezone
+
 from pathlib import Path
 import asyncio
+from pprint import pformat, pprint
 
+from sdbus import DbusFailedError, SdBus, SdBusUnmappedMessageError, sd_bus_open_system
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, PlainTextResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from sse_starlette import EventSourceResponse, ServerSentEvent
+
+from homedash.dbus.systemd_interface import OrgFreedesktopSystemd1ManagerInterface
+from homedash.dbus.systemd_unit_interface import OrgFreedesktopSystemd1UnitInterface
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -53,6 +59,43 @@ services = {
 }
 
 
+class AlreadySubscribed(DbusFailedError):
+    dbus_error_name: str = 'org.freedesktop.systemd1.AlreadySubscribed'
+
+
+class NoSuchUnit(DbusFailedError):
+    dbus_error_name: str = 'org.freedesktop.systemd1.NoSuchUnit'
+
+
+class SystemD(OrgFreedesktopSystemd1ManagerInterface):
+    def __init__(self, bus: SdBus | None = None):
+        super().__init__()
+        self.bus: SdBus = bus or sd_bus_open_system()
+        self._proxify(
+            service_name='org.freedesktop.systemd1',
+            object_path='/org/freedesktop/systemd1',
+            bus=self.bus
+        )
+
+    async def get_unit_proxy(self, name: str) -> OrgFreedesktopSystemd1UnitInterface:
+        object_path = await self.get_unit(name)
+
+        return OrgFreedesktopSystemd1UnitInterface.new_proxy(
+            service_name='org.freedesktop.systemd1',
+            object_path=object_path,
+            bus=self.bus
+        )
+
+    async def ensure_subscribed(self) -> None:
+        try:
+            await self.subscribe()
+        except AlreadySubscribed:
+            pass
+
+
+systemd = SystemD()
+
+
 async def syslog(request: Request) -> Response:
     unit = request.query_params.get('unit')
     unit_arg = f'-u {unit}' if unit else ''
@@ -64,13 +107,36 @@ async def syslog(request: Request) -> Response:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        async for line in proc.stdout:
+        async for line in proc.stdout:  # pyright: ignore[reportOptionalIterable]
             yield ServerSentEvent(
                 id='syslog',
                 data=line.decode('utf-8').strip()
             )
 
     return EventSourceResponse(tail_syslog())
+
+
+async def status(request: Request) -> Response:
+    unit_name = request.query_params['unit']
+    try:
+        unit = await systemd.get_unit_proxy(unit_name)
+    except NoSuchUnit:
+        unit = await systemd.get_unit_proxy(f'{unit_name}.service')
+
+    await systemd.ensure_subscribed()
+
+    async def body():
+        last_state = await unit.active_state
+        yield ServerSentEvent(id='state', data=last_state)
+        async for interface, changed, invalidated in unit.properties_changed:
+            if interface == "org.freedesktop.systemd1.Unit":
+                _, state = changed['ActiveState']  # pyright: ignore[reportAny]
+                assert isinstance(state, str)
+                if state != last_state:
+                    yield ServerSentEvent(id='state', data=state)
+                    last_state = state
+
+    return EventSourceResponse(body())
 
 
 async def homepage(request: Request) -> Response:
@@ -89,6 +155,7 @@ app = Starlette(
     routes=[
         Route("/", homepage),
         Route("/syslog", syslog),
+        Route("/status", status),
         Route("/health", health),
         Mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static"),
     ],

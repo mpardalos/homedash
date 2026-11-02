@@ -18,6 +18,7 @@
         p.starlette
         p.sse-starlette
         p.uvicorn
+        p.sdbus
       ];
     in
     {

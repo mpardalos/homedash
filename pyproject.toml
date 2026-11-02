@@ -10,7 +10,8 @@ dependencies = [
   "starlette",
   "sse-starlette",
   "uvicorn",
-  "jinja2"
+  "jinja2",
+  "sdbus"
 ]
 
 [project.scripts]
