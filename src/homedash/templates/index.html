@@ -6,6 +6,11 @@
     <a href="{{ svc['url'] }}">
       <img src="{{ svc['icon'] }}" alt="" width="32" height="32">
       {{ name }}
+      {% if 'service' in svc %}
+      <div sse-connect="/service/{{ svc['service'] }}/state">
+	<div sse-swap="state"></div>
+      </div>
+      {% endif %}
     </a>
   {% endfor %}
 </nav>

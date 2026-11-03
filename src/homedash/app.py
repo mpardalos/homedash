@@ -27,7 +27,8 @@ templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 services = {
     'Jellyfin': {
         'url': 'https://jellyfin.home.mpardalos.com',
-        'icon': 'https://jellyfin.home.mpardalos.com/web/favicon.bc8d51405ec040305a87.ico'
+        'icon': 'https://jellyfin.home.mpardalos.com/web/favicon.bc8d51405ec040305a87.ico',
+        'service': 'tailscaled'
     },
     'Seerr': {
         'url': 'https://seerr.home.mpardalos.com',
@@ -127,7 +128,7 @@ async def system_log(request: Request) -> Response:
     return await syslog_event_source()
 
 
-async def status(request: Request) -> Response:
+async def unit_state(request: Request) -> Response:
     unit_name: str = request.path_params['unit']
     try:
         unit = await systemd.get_unit_proxy(unit_name)
@@ -136,15 +137,27 @@ async def status(request: Request) -> Response:
 
     await systemd.ensure_subscribed()
 
+    def state_event(state: str):
+        print(f'Sending update: {unit_name} is {state}')
+        return ServerSentEvent(
+            event='state',
+            data=templates.get_template('service-state.html').render({
+                'sse_path': request.url.path,
+                'sse_event': 'state',
+                'state': state
+            })
+        )
+
     async def body():
         last_state = await unit.active_state
-        yield ServerSentEvent(id='state', data=last_state)
+        yield state_event(last_state)
         async for interface, changed, invalidated in unit.properties_changed:
             if interface == "org.freedesktop.systemd1.Unit":
                 _, state = changed['ActiveState']  # pyright: ignore[reportAny]
+
                 assert isinstance(state, str)
                 if state != last_state:
-                    yield ServerSentEvent(id='state', data=state)
+                    yield state_event(state)
                     last_state = state
 
     return EventSourceResponse(body())
@@ -165,7 +178,7 @@ async def health(request: Request) -> JSONResponse:
 app = Starlette(
     routes=[
         Route("/", homepage),
-        Route("/service/{unit}/status", status),
+        Route("/service/{unit}/state", unit_state),
         Route("/service/{unit}/log", unit_log),
         Route("/system/log", system_log),
         Mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static"),
